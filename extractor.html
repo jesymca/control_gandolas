@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Extractor de Estructura Supabase</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Extrayendo Tablas y Columnas...</h1>
+    <div id="resultado">Cargando datos desde Supabase...</div>
+
+    <script>
+        // Cambié el nombre a 'supabaseExtractor' para que no choque con nada
+        const urlExtractor = "https://olagcugttxkflenqfxec.supabase.co";
+        const keyExtractor = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9sYWdjdWd0dHhrZmxlbnFmeGVjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzYyMDM3MywiZXhwIjoyMDk5MTk2MzczfQ.z-uZPAN4pka9qTsp4JvenNjEhxKwvd6sbWTdzVyKxLk";
+        
+        const supabaseExtractor = supabase.createClient(urlExtractor, keyExtractor);
+
+        async function extraerEstructura() {
+            try {
+                const response = await fetch(`${urlExtractor}/rest/v1/`, {
+                    headers: {
+                        'apikey': keyExtractor,
+                        'Authorization': `Bearer ${keyExtractor}`
+                    }
+                });
+                const esquema = await response.json();
+                
+                if (esquema && esquema.definitions) {
+                    console.log("Estructura completa:", esquema.definitions);
+                    document.getElementById("resultado").innerHTML = "<h2>Tablas y Campos Detectados:</h2><pre style='background: #222; color: #fff; padding: 15px; border-radius: 5px; overflow: auto;'>" + JSON.stringify(esquema.definitions, null, 2) + "</pre>";
+                } else {
+                    document.getElementById("resultado").innerText = "No se pudieron formatear las definiciones. Revisa la consola (F12).";
+                }
+                
+            } catch (err) {
+                document.getElementById("resultado").innerText = "Error de conexión: " + err.message;
+                console.error(err);
+            }
+        }
+
+        extraerEstructura();
+    </script>
+</body>
+</html>
