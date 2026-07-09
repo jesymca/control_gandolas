@@ -1,0 +1,3 @@
+var SUPABASE_URL = 'https://olagcugttxkflenqfxec.supabase.co';
+var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9sYWdjdWd0dHhrZmxlbnFmeGVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2MjAzNzMsImV4cCI6MjA5OTE5NjM3M30.a3pToxWDwLE6Db4yG0C9I_Udyy1cVQ8i3Fpyh6rz48w';
+var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

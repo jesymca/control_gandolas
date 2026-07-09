@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Administrativo - GandolaControl</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <div class="bg-warning" style="height:4px;"></div>
+    <div class="bg-success" style="height:4px;"></div>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="index.html">
+                <i class="bi bi-truck me-2 text-warning"></i>
+                <span class="text-warning">Gandola</span><span class="text-success">Control</span>
+            </a>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-warning text-dark"><i class="bi bi-shield-lock me-1"></i>Admin</span>
+                <span class="text-light d-none d-md-inline" id="nombreAdmin"></span>
+                <button class="btn btn-outline-light btn-sm" onclick="cerrarSesion()"><i class="bi bi-box-arrow-right me-1"></i>Salir</button>
+            </div>
+        </div>
+    </nav>
+    <div class="container py-4">
+        <div class="text-center mb-4">
+            <span class="badge bg-warning text-dark mb-2">PANEL DE ADMINISTRACIÓN</span>
+            <h3 class="fw-bold">Gestión del <span class="text-warning">Sistema</span></h3>
+        </div>
+        <ul class="nav nav-tabs mb-4" role="tablist">
+            <li class="nav-item"><button class="nav-link active text-warning fw-bold" data-bs-toggle="tab" data-bs-target="#tabUsuarios"><i class="bi bi-people me-1"></i>Usuarios</button></li>
+            <li class="nav-item"><button class="nav-link text-success fw-bold" data-bs-toggle="tab" data-bs-target="#tabClave"><i class="bi bi-key me-1"></i>Cambiar Clave</button></li>
+            <li class="nav-item"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tabAccesos"><i class="bi bi-grid me-1"></i>Módulos</button></li>
+        </ul>
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="tabUsuarios">
+                <div class="card border-0 shadow">
+                    <div class="card-header bg-warning text-dark fw-bold">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-people me-2"></i>Usuarios del Sistema</span>
+                            <button class="btn btn-dark btn-sm" data-bs-toggle="modal" data-bs-target="#modalUsuario"><i class="bi bi-plus-circle me-1"></i>Nuevo Usuario</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="alertAdmin" class="alert d-none" role="alert"></div>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-dark">
+                                    <tr><th>Nombre Completo</th><th>Correo</th><th>Cédula</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr>
+                                </thead>
+                                <tbody id="tbodyUsuarios"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="tabClave">
+                <div class="card border-0 shadow">
+                    <div class="card-header bg-success text-white fw-bold"><i class="bi bi-key me-2"></i>Cambiar Mi Contraseña</div>
+                    <div class="card-body p-4">
+                        <div id="alertClave" class="alert d-none" role="alert"></div>
+                        <form id="formClave" style="max-width:500px;">
+                            <div class="mb-3"><label class="form-label fw-bold">Contraseña Actual</label><input type="password" class="form-control" id="claveActual" required></div>
+                            <div class="mb-3"><label class="form-label fw-bold">Nueva Contraseña</label><input type="password" class="form-control" id="claveNueva" required></div>
+                            <div class="mb-3"><label class="form-label fw-bold">Confirmar Nueva Contraseña</label><input type="password" class="form-control" id="claveConfirmar" required></div>
+                            <button type="submit" class="btn btn-success text-white fw-bold"><i class="bi bi-check-circle me-1"></i>Actualizar Contraseña</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="tabAccesos">
+                <div class="row g-4">
+                    <div class="col-md-6 col-lg-3">
+                        <a href="gandolas.html" class="text-decoration-none"><div class="card h-100 border-0 shadow border-start border-warning border-4"><div class="card-body text-center p-4"><i class="bi bi-truck text-warning" style="font-size:3rem;"></i><h6 class="fw-bold mt-3 text-dark">Gandolas</h6></div></div></a>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <a href="registro-chofer.html" class="text-decoration-none"><div class="card h-100 border-0 shadow border-start border-success border-4"><div class="card-body text-center p-4"><i class="bi bi-person-badge text-success" style="font-size:3rem;"></i><h6 class="fw-bold mt-3 text-dark">Choferes</h6></div></div></a>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <a href="ingreso.html" class="text-decoration-none"><div class="card h-100 border-0 shadow border-start border-warning border-4"><div class="card-body text-center p-4"><i class="bi bi-arrow-down-circle text-warning" style="font-size:3rem;"></i><h6 class="fw-bold mt-3 text-dark">Ingreso</h6></div></div></a>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <a href="salida.html" class="text-decoration-none"><div class="card h-100 border-0 shadow border-start border-success border-4"><div class="card-body text-center p-4"><i class="bi bi-arrow-up-circle text-success" style="font-size:3rem;"></i><h6 class="fw-bold mt-3 text-dark">Salida</h6></div></div></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="modalUsuario" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-person-plus me-2"></i>Nuevo Usuario</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formUsuario">
+                        <div class="mb-3"><label class="form-label fw-bold">Nombre Completo</label><input type="text" class="form-control" id="nuNombre" required></div>
+                        <div class="mb-3"><label class="form-label fw-bold">Correo Electrónico</label><input type="email" class="form-control" id="nuCorreo" required></div>
+                        <div class="mb-3"><label class="form-label fw-bold">Cédula de Identidad</label><input type="text" class="form-control" id="nuCedula" required></div>
+                        <div class="mb-3"><label class="form-label fw-bold">Contraseña</label><input type="password" class="form-control" id="nuClave" required></div>
+                        <div class="mb-3"><label class="form-label fw-bold">Rol</label><select class="form-select" id="nuRol"><option value="operador">Operador</option><option value="admin">Administrador</option></select></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning text-dark fw-bold" id="btnGuardarUsuario"><i class="bi bi-check-circle me-1"></i>Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <footer class="bg-dark text-center py-3 mt-5"><small class="text-muted"><span class="text-warning fw-bold">Gandola</span><span class="text-success fw-bold">Control</span> v1.0</small></footer>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/admin.js"></script>
+</body>
+</html>
