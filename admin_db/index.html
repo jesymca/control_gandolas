@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Base de Datos - Admin</title>
+    <!-- CSS de Tabulator (Tema Midnight/Oscuro) -->
+    <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator_midnight.min.css" rel="stylesheet">
+    <!-- Estilos personalizados -->
+    <link rel="stylesheet" href="estilos.css">
+    <!-- SDK Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- JS de Tabulator -->
+    <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>🎛️ Panel de Control de Datos</h1>
+            <p>Haz doble clic en cualquier celda para editar registros directamente en Supabase o usa la consola SQL abajo.</p>
+        </header>
+
+        <!-- Barra de pestañas para cambiar de tabla -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="cambiarTabla('gandolas', this)">🚚 Gandolas</button>
+            <button class="tab-btn" onclick="cambiarTabla('choferes', this)">🧑‍✈️ Choferes</button>
+            <button class="tab-btn" onclick="cambiarTabla('usuarios', this)">👥 Usuarios</button>
+            <button class="tab-btn" onclick="cambiarTabla('registros', this)">📝 Registros</button>
+        </div>
+
+        <!-- Contenedor donde Tabulator dibujará la tabla activa -->
+        <div id="tabla-contenedor"></div>
+
+        <!-- Consola SQL Ejecutable -->
+        <div class="sql-console">
+            <h2>💻 Consola SQL Directa</h2>
+            <textarea id="sql-query" placeholder="Escribe tu consulta SQL aquí... Ejemplo: SELECT id, placa, modelo FROM gandolas;"></textarea>
+            <button class="btn-execute" onclick="ejecutarSQL()">Ejecutar Consulta</button>
+            
+            <div id="sql-resultado-container">
+                <h3>Resultado:</h3>
+                <div id="tabla-sql-resultado"></div>
+                <pre id="sql-error" style="display:none; background: #500; color: #fff; padding: 10px; border-radius: 4px; font-family: monospace;"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="gestor.js"></script>
+</body>
+</html>
