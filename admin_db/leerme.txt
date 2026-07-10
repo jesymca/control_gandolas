@@ -1,0 +1,56 @@
+Para que funcione completamente, también necesitas crear una función RPC en Supabase:
+Ve a tu panel de Supabase → SQL Editor y ejecuta:
+
+-- Crear función RPC para ejecutar SQL seguro
+CREATE OR REPLACE FUNCTION exec_sql(sql_query text)
+RETURNS SETOF json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN QUERY EXECUTE sql_query;
+END;
+$$;
+
+-- Función para obtener información de columnas
+CREATE OR REPLACE FUNCTION get_table_columns(table_name text)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    result json;
+BEGIN
+    SELECT json_agg(
+        json_build_object(
+            'title', column_name,
+            'field', column_name,
+            'editor', 
+            CASE 
+                WHEN data_type IN ('integer', 'numeric', 'real', 'double precision') THEN 'number'
+                WHEN data_type IN ('boolean') THEN 'tickCross'
+                WHEN data_type IN ('date', 'timestamp', 'timestamptz') THEN 'date'
+                WHEN data_type IN ('text', 'character varying') AND character_maximum_length > 100 THEN 'textarea'
+                ELSE 'input'
+            END,
+            'headerFilter', 
+            CASE 
+                WHEN data_type IN ('text', 'character varying') THEN 'input'
+                ELSE NULL
+            END,
+            'width', 
+            CASE 
+                WHEN column_name IN ('id', 'cedula') THEN 100
+                WHEN column_name LIKE '%fecha%' THEN 150
+                WHEN column_name LIKE '%observaciones%' THEN 200
+                ELSE 150
+            END
+        )
+    ) INTO result
+    FROM information_schema.columns
+    WHERE table_name = table_name
+    ORDER BY ordinal_position;
+    
+    RETURN result;
+END;
+$$;

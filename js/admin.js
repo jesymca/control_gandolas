@@ -2,6 +2,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     var usuario = verificarSesion();
     if (!usuario || usuario.rol !== 'admin') { window.location.href = 'login.html'; return; }
     document.getElementById('nombreAdmin').textContent = usuario.nombre;
+    var linkAdminDb = document.getElementById('linkAdminDb');
+    if (linkAdminDb) { linkAdminDb.classList.remove('d-none'); }
     await cargarUsuarios();
     document.getElementById('btnGuardarUsuario').addEventListener('click', crearUsuario);
     document.getElementById('formClave').addEventListener('submit', cambiarClave);

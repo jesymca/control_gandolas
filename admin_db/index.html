@@ -21,6 +21,10 @@
             <p>Haz doble clic en cualquier celda para editar registros directamente en Supabase o usa la consola SQL abajo.</p>
         </header>
 
+        <div id="acceso-admin" class="alert alert-danger" role="alert" style="display:none;">
+            Solo el usuario administrador autenticado puede editar o ejecutar consultas en este panel.
+        </div>
+
         <!-- Barra de pestañas para cambiar de tabla -->
         <div class="tabs">
             <button class="tab-btn active" onclick="cambiarTabla('gandolas', this)">🚚 Gandolas</button>
@@ -46,6 +50,8 @@
         </div>
     </div>
 
+    <script src="../js/config.js"></script>
+    <script src="../js/auth.js"></script>
     <script src="gestor.js"></script>
 </body>
 </html>
