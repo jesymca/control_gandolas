@@ -1,13 +1,64 @@
-// 1. Configuración de Supabase con clave service_role
-const supabaseUrlAdmin = "https://olagcugttxkflenqfxec.supabase.co";
-const supabaseKeyAdmin = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9sYWdjdWd0dHhrZmxlbnFmeGVjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzYyMDM3MywiZXhwIjoyMDk5MTk2MzczfQ.z-uZPAN4pka9qTsp4JvenNjEhxKwvd6sbWTdzVyKxLk";
-
-const supabaseAdminPanel = supabase.createClient(supabaseUrlAdmin, supabaseKeyAdmin);
+// 1. Configuración de Supabase usando el cliente del navegador (sin clave de service_role)
+const supabaseAdminPanel = supabase;
 
 let tablaInteractiva; 
 let tablaResultadoSQL;
 let tablaActual = 'gandolas';
 let cacheEstructuraTablas = {}; // Cache para estructura de tablas
+
+function obtenerUsuarioActual() {
+    try {
+        const data = sessionStorage.getItem('usuario');
+        if (!data) return null;
+        return JSON.parse(data);
+    } catch (error) {
+        console.warn('No se pudo leer la sesión del usuario:', error);
+        return null;
+    }
+}
+
+function puedeEditarPanel() {
+    const usuario = obtenerUsuarioActual();
+    return !!usuario && usuario.rol === 'admin';
+}
+
+function prepararAccesoPanel() {
+    const usuario = obtenerUsuarioActual();
+    const banner = document.getElementById('acceso-admin');
+    const elementosProtegidos = document.querySelectorAll('.tab-btn, .btn-execute, #sql-query');
+
+    if (!usuario) {
+        if (banner) {
+            banner.textContent = 'Debes iniciar sesión como administrador para usar este panel.';
+            banner.style.display = 'block';
+        }
+        window.location.href = '../login.html';
+        return false;
+    }
+
+    if (usuario.rol !== 'admin') {
+        if (banner) {
+            banner.textContent = 'Solo el usuario administrador autenticado puede editar o ejecutar consultas en este panel.';
+            banner.style.display = 'block';
+        }
+        elementosProtegidos.forEach(elemento => {
+            elemento.disabled = true;
+            elemento.setAttribute('aria-disabled', 'true');
+        });
+        return false;
+    }
+
+    if (banner) {
+        banner.style.display = 'none';
+    }
+
+    elementosProtegidos.forEach(elemento => {
+        elemento.disabled = false;
+        elemento.removeAttribute('aria-disabled');
+    });
+
+    return true;
+}
 
 // 2. Función para obtener la estructura de una tabla dinámicamente
 async function obtenerEstructuraTabla(nombreTabla) {
@@ -153,6 +204,11 @@ function generarColumnasBasicas(nombreTabla) {
 
 // 7. Función mejorada para cambiar de pestaña y renderizar tablas
 async function cambiarTabla(nombreTabla, boton) {
+    if (!puedeEditarPanel()) {
+        alert('Solo el administrador autenticado puede ver y editar este panel.');
+        return;
+    }
+
     tablaActual = nombreTabla;
 
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -202,6 +258,12 @@ async function cambiarTabla(nombreTabla, boton) {
 
         // Evento de auto-guardado en base de datos al editar
         tablaInteractiva.on("cellEdited", async function(cell) {
+            if (!puedeEditarPanel()) {
+                alert('No tienes permisos para editar este panel.');
+                cell.restoreOldValue();
+                return;
+            }
+
             let filaDatos = cell.getRow().getData();
             let columnaModificada = cell.getField();
             let nuevoValor = cell.getValue();
@@ -240,6 +302,11 @@ async function cambiarTabla(nombreTabla, boton) {
 
 // 8. Función para eliminar registro
 async function eliminarRegistro(row) {
+    if (!puedeEditarPanel()) {
+        alert('No tienes permisos para eliminar registros.');
+        return;
+    }
+
     try {
         const data = row.getData();
         const { error } = await supabaseAdminPanel
@@ -258,6 +325,11 @@ async function eliminarRegistro(row) {
 
 // 9. Función para duplicar registro
 async function duplicarRegistro(row) {
+    if (!puedeEditarPanel()) {
+        alert('No tienes permisos para duplicar registros.');
+        return;
+    }
+
     try {
         const data = row.getData();
         // Eliminar el ID para crear uno nuevo
@@ -290,7 +362,12 @@ async function ejecutarSQL() {
     const resultadoDiv = document.getElementById("tabla-sql-resultado");
 
     errorBox.style.display = "none";
-    resultadoDiv.innerHTML = "<span style='color: #aaa;'>⏳ Ejecutando sentencia en Supabase...</span>";
+    resultadoDiv.innerHTML = "<span style='color: #aaa;'>⏳ Ejecutando sentencia segura...</span>";
+
+    if (!puedeEditarPanel()) {
+        alert('Solo el administrador autenticado puede ejecutar consultas en este panel.');
+        return;
+    }
 
     if (!query) {
         alert("Por favor, escribe una consulta SQL.");
@@ -298,118 +375,42 @@ async function ejecutarSQL() {
         return;
     }
 
+    if (!/^\s*select\b/i.test(query)) {
+        resultadoDiv.innerHTML = "";
+        errorBox.innerText = "⚠️ Este panel solo permite consultas SELECT de lectura. Para modificar datos, usa las celdas editables del administrador.";
+        errorBox.style.display = "block";
+        return;
+    }
+
     try {
-        // Detectar si es una consulta SELECT
-        const esSelect = query.toLowerCase().trim().startsWith('select');
+        const queryLower = query.toLowerCase();
+        const match = queryLower.match(/from\s+([a-zA-Z0-9_]+)/);
 
-        if (esSelect) {
-            // Para SELECT, usar la API de Supabase directamente
-            const queryLower = query.toLowerCase();
-            const match = queryLower.match(/from\s+([a-zA-Z0-9_]+)/);
-            
-            if (match) {
-                const tabla = match[1];
-                const { data, error } = await supabaseAdminPanel
-                    .from(tabla)
-                    .select('*');
-
-                if (error) throw error;
-
-                mostrarResultadoSQL(data || []);
-            } else {
-                // Si no podemos detectar la tabla, usar RPC
-                await ejecutarSQLViaRPC(query);
-            }
-        } else {
-            // Para INSERT, UPDATE, DELETE, usar RPC
-            await ejecutarSQLViaRPC(query);
+        if (!match) {
+            throw new Error('No se pudo detectar la tabla objetivo en la consulta.');
         }
 
+        const tabla = match[1];
+        const { data, error } = await supabaseAdminPanel
+            .from(tabla)
+            .select('*');
+
+        if (error) throw error;
+
+        mostrarResultadoSQL(data || []);
     } catch (err) {
         resultadoDiv.innerHTML = "";
-        errorBox.innerText = "❌ Error de Sintaxis / Privilegios SQL: \n" + err.message;
+        errorBox.innerText = "❌ Error de consulta: \n" + err.message;
         errorBox.style.display = "block";
     }
 }
 
-// 11. Función para ejecutar SQL via RPC
 async function ejecutarSQLViaRPC(query) {
-    const resultadoDiv = document.getElementById("tabla-sql-resultado");
-    
-    try {
-        // Intentar ejecutar con RPC
-        const response = await fetch(`${supabaseUrlAdmin}/rest/v1/rpc/exec_sql`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': supabaseKeyAdmin,
-                'Authorization': `Bearer ${supabaseKeyAdmin}`
-            },
-            body: JSON.stringify({ 
-                sql_query: query 
-            })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            if (Array.isArray(data) && data.length > 0) {
-                mostrarResultadoSQL(data);
-            } else {
-                resultadoDiv.innerHTML = `
-                    <div style="color: #00ff66; padding: 10px; background: #152515; border-radius:4px; font-size:14px;">
-                        ✅ Query SQL ejecutado correctamente. 
-                        ${data.message || 'Comando completado sin retorno de filas.'}
-                    </div>
-                `;
-            }
-        } else {
-            // Si falla RPC, intentar con el método directo
-            await ejecutarSQLDirecto(query);
-        }
-    } catch (error) {
-        // Si todo falla, intentar con el método directo
-        await ejecutarSQLDirecto(query);
-    }
+    throw new Error('La consola SQL solo permite consultas SELECT seguras desde el navegador.');
 }
 
-// 12. Función para ejecutar SQL directamente
 async function ejecutarSQLDirecto(query) {
-    const resultadoDiv = document.getElementById("tabla-sql-resultado");
-    
-    try {
-        // Intentar determinar la tabla y operación
-        const queryLower = query.toLowerCase().trim();
-        const match = queryLower.match(/(from|into|update|delete from)\s+([a-zA-Z0-9_]+)/);
-        
-        if (match) {
-            const tabla = match[2];
-            const { data, error } = await supabaseAdminPanel
-                .from(tabla)
-                .select('*');
-
-            if (error) throw error;
-
-            if (Array.isArray(data) && data.length > 0) {
-                mostrarResultadoSQL(data);
-            } else {
-                resultadoDiv.innerHTML = `
-                    <div style="color: #ffcc00; padding: 10px; background: #332200; border-radius:4px; font-size:14px;">
-                        ⚠️ La consulta se ejecutó pero no hay datos para mostrar.
-                    </div>
-                `;
-            }
-        } else {
-            throw new Error('No se pudo determinar la tabla objetivo');
-        }
-    } catch (error) {
-        resultadoDiv.innerHTML = `
-            <div style="color: #ff4444; padding: 10px; background: #331111; border-radius:4px; font-size:14px;">
-                ❌ Error al ejecutar la consulta: ${error.message}
-                <br><br>
-                <small>Nota: Para consultas complejas, asegúrate de tener una función RPC 'exec_sql' configurada en Supabase.</small>
-            </div>
-        `;
-    }
+    throw new Error('La consola SQL solo permite consultas SELECT seguras desde el navegador.');
 }
 
 // 13. Función para mostrar resultados SQL en tabla
@@ -447,6 +448,10 @@ function mostrarResultadoSQL(data) {
 
 // 14. Carga inicial del DOM
 document.addEventListener("DOMContentLoaded", () => {
+    if (!prepararAccesoPanel()) {
+        return;
+    }
+
     const primerBoton = document.querySelector('.tab-btn');
     if (primerBoton) {
         cambiarTabla('gandolas', primerBoton);
