@@ -1,4 +1,4 @@
-// 1. Configuración de Supabase con clave service_role (Superusuario) para saltarse restricciones RLS
+// 1. Configuración de Supabase con clave service_role
 const supabaseUrlAdmin = "https://olagcugttxkflenqfxec.supabase.co";
 const supabaseKeyAdmin = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9sYWdjdWd0dHhrZmxlbnFmeGVjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzYyMDM3MywiZXhwIjoyMDk5MTk2MzczfQ.z-uZPAN4pka9qTsp4JvenNjEhxKwvd6sbWTdzVyKxLk";
 
@@ -7,99 +7,290 @@ const supabaseAdminPanel = supabase.createClient(supabaseUrlAdmin, supabaseKeyAd
 let tablaInteractiva; 
 let tablaResultadoSQL;
 let tablaActual = 'gandolas';
+let cacheEstructuraTablas = {}; // Cache para estructura de tablas
 
-// 2. Esquema de columnas mapeado directamente de las definiciones de tu base de datos
-const configuracionColumnas = {
-    gandolas: [
-        {title: "ID", field: "id", width: 100, headerSort: false},
-        {title: "Placa", field: "placa", editor: "input", headerFilter: "input"},
-        {title: "Modelo", field: "modelo", editor: "input"},
-        {title: "Año", field: "anio", editor: "number", width: 80},
-        {title: "Cant. Cauchos", field: "cantidad_cauchos", editor: "number", width: 120},
-        {title: "Marca Cauchos", field: "marca_cauchos", editor: "input"},
-        {title: "Cambio Aceite", field: "fecha_cambio_aceite", editor: "date"},
-        {title: "Último Gasoil", field: "fecha_ultimo_gasoil", editor: "date"}
-    ],
-    choferes: [
-        {title: "ID", field: "id", width: 100, headerSort: false},
-        {title: "Cédula", field: "cedula", editor: "input", headerFilter: "input"},
-        {title: "Nombre", field: "nombre", editor: "input"},
-        {title: "Apellido", field: "apellido", editor: "input"},
-        {title: "Teléfono", field: "telefono", editor: "input"}
-    ],
-    usuarios: [
-        {title: "ID", field: "id", width: 100, headerSort: false},
-        {title: "Cédula", field: "cedula", editor: "input", headerFilter: "input"},
-        {title: "Nombre Completo", field: "nombre_completo", editor: "input"},
-        {title: "Correo", field: "correo", editor: "input"},
-        {title: "Rol", field: "rol", editor: "list", editorParams: {values: ["admin", "operador"]}},
-        {title: "Activo", field: "activo", editor: "tickCross", formatter: "tickCross", width: 90}
-    ],
-    registros: [
-        {title: "ID", field: "id", width: 100, headerSort: false},
-        {title: "Gandola ID", field: "gandola_id", width: 120},
-        {title: "Tipo", field: "tipo", editor: "input", headerFilter: "input"},
-        {title: "Fecha/Hora", field: "fecha_hora", width: 150},
-        {title: "Observaciones", field: "observaciones", editor: "textarea"}
-    ]
-};
+// 2. Función para obtener la estructura de una tabla dinámicamente
+async function obtenerEstructuraTabla(nombreTabla) {
+    // Si ya tenemos la estructura en caché, la devolvemos
+    if (cacheEstructuraTablas[nombreTabla]) {
+        return cacheEstructuraTablas[nombreTabla];
+    }
 
-// 3. Función para alternar de pestaña y renderizar tablas estándar
+    try {
+        // Obtener una muestra de datos para inferir la estructura
+        const { data, error } = await supabaseAdminPanel
+            .from(nombreTabla)
+            .select('*')
+            .limit(1);
+
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+            // Si no hay datos, intentamos obtener la estructura mediante una consulta de información
+            const { data: columnInfo, error: infoError } = await supabaseAdminPanel
+                .rpc('get_table_columns', { table_name: nombreTabla });
+
+            if (infoError) {
+                console.warn('No se pudo obtener información de columnas:', infoError);
+                return generarColumnasBasicas(nombreTabla);
+            }
+
+            return columnInfo;
+        }
+
+        // Inferir columnas de los datos existentes
+        const columnas = Object.keys(data[0]).map(nombreColumna => {
+            const config = {
+                title: formatearNombreColumna(nombreColumna),
+                field: nombreColumna,
+                headerSort: true
+            };
+
+            // Determinar el tipo de editor basado en el tipo de dato
+            const valorMuestra = data[0][nombreColumna];
+            config.editor = determinarEditor(valorMuestra);
+            
+            // Configurar filtros de header para ciertos tipos
+            if (typeof valorMuestra === 'string' || valorMuestra === null) {
+                config.headerFilter = 'input';
+            }
+
+            // Ancho sugerido basado en el tipo
+            config.width = determinarAncho(nombreColumna, valorMuestra);
+
+            return config;
+        });
+
+        // Cachear la estructura
+        cacheEstructuraTablas[nombreTabla] = columnas;
+        return columnas;
+
+    } catch (error) {
+        console.error('Error obteniendo estructura de tabla:', error);
+        return generarColumnasBasicas(nombreTabla);
+    }
+}
+
+// 3. Función para formatear nombres de columnas
+function formatearNombreColumna(nombre) {
+    return nombre
+        .split('_')
+        .map(palabra => palabra.charAt(0).toUpperCase() + palabra.slice(1))
+        .join(' ');
+}
+
+// 4. Determinar el editor apropiado basado en el valor
+function determinarEditor(valor) {
+    if (valor === null || valor === undefined) return 'input';
+    
+    if (typeof valor === 'number') {
+        return 'number';
+    }
+    
+    if (typeof valor === 'boolean') {
+        return 'tickCross';
+    }
+    
+    if (valor instanceof Date || (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}/.test(valor))) {
+        return 'date';
+    }
+    
+    if (typeof valor === 'string' && valor.length > 100) {
+        return 'textarea';
+    }
+    
+    return 'input';
+}
+
+// 5. Determinar ancho sugerido para columna
+function determinarAncho(nombre, valor) {
+    // Columnas que deberían ser más estrechas
+    const columnasEstrechas = ['id', 'cedula', 'rol', 'activo'];
+    if (columnasEstrechas.includes(nombre)) {
+        return 100;
+    }
+
+    // Columnas de fecha
+    if (nombre.includes('fecha')) {
+        return 150;
+    }
+
+    // Columnas de texto largo
+    if (nombre.includes('observaciones') || nombre.includes('descripcion')) {
+        return 200;
+    }
+
+    return 150;
+}
+
+// 6. Columnas básicas por si falla la detección automática
+function generarColumnasBasicas(nombreTabla) {
+    // Columnas genéricas basadas en nombres comunes
+    const columnasBase = [
+        {title: "ID", field: "id", width: 100, headerSort: false, editor: false},
+        {title: "Creado en", field: "created_at", width: 150, editor: false},
+        {title: "Actualizado en", field: "updated_at", width: 150, editor: false}
+    ];
+
+    // Añadir algunas columnas comunes según el nombre de la tabla
+    const columnasComunes = {
+        gandolas: ['placa', 'modelo', 'anio'],
+        choferes: ['cedula', 'nombre', 'apellido'],
+        usuarios: ['cedula', 'nombre_completo', 'correo', 'rol'],
+        registros: ['gandola_id', 'tipo', 'fecha_hora']
+    };
+
+    const columnasExtra = (columnasComunes[nombreTabla] || []).map(col => ({
+        title: formatearNombreColumna(col),
+        field: col,
+        editor: 'input',
+        headerFilter: 'input',
+        width: 150
+    }));
+
+    return [...columnasBase, ...columnasExtra];
+}
+
+// 7. Función mejorada para cambiar de pestaña y renderizar tablas
 async function cambiarTabla(nombreTabla, boton) {
     tablaActual = nombreTabla;
 
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     if(boton) boton.classList.add('active');
 
-    let { data, error } = await supabaseAdminPanel.from(nombreTabla).select('*');
-    
-    if (error) {
-        console.error("Error cargando tabla:", error);
-        alert("Error al conectar con la tabla: " + error.message);
-        return;
-    }
-
-    if (tablaInteractiva) tablaInteractiva.destroy();
-
-    tablaInteractiva = new Tabulator("#tabla-contenedor", {
-        data: data,
-        layout: "fitColumns",
-        responsiveLayout: "hide",
-        pagination: "local",
-        paginationSize: 15,
-        placeholder: "No hay registros en esta tabla",
-        columns: configuracionColumnas[nombreTabla]
-    });
-
-    // Evento de auto-guardado en base de datos al realizar doble click y editar
-    tablaInteractiva.on("cellEdited", async function(cell) {
-        let filaDatos = cell.getRow().getData();
-        let columnaModificada = cell.getField();
-        let nuevoValor = cell.getValue();
-
-        const { error: updateError } = await supabaseAdminPanel
-            .from(tablaActual)
-            .update({ [columnaModificada]: nuevoValor })
-            .eq('id', filaDatos.id);
-
-        if (updateError) {
-            console.error("Error al actualizar Supabase:", updateError);
-            alert("No se pudo guardar el cambio en el servidor.");
-            cell.restoreOldValue(); 
-        } else {
-            console.log(`¡Modificado con éxito! [${tablaActual}] -> ID: ${filaDatos.id}`);
+    try {
+        // Obtener datos de la tabla
+        const { data, error } = await supabaseAdminPanel.from(nombreTabla).select('*');
+        
+        if (error) {
+            console.error("Error cargando tabla:", error);
+            alert("Error al conectar con la tabla: " + error.message);
+            return;
         }
-    });
+
+        // Obtener estructura dinámica de la tabla
+        const columnas = await obtenerEstructuraTabla(nombreTabla);
+
+        if (tablaInteractiva) tablaInteractiva.destroy();
+
+        tablaInteractiva = new Tabulator("#tabla-contenedor", {
+            data: data || [],
+            layout: "fitColumns",
+            responsiveLayout: "hide",
+            pagination: "local",
+            paginationSize: 15,
+            placeholder: "No hay registros en esta tabla",
+            columns: columnas,
+            // Añadir menú contextual para operaciones adicionales
+            rowContextMenu: [
+                {
+                    label: "Eliminar fila",
+                    action: function(e, row) {
+                        if (confirm(`¿Estás seguro de eliminar el registro ID: ${row.getData().id}?`)) {
+                            eliminarRegistro(row);
+                        }
+                    }
+                },
+                {
+                    label: "Duplicar fila",
+                    action: function(e, row) {
+                        duplicarRegistro(row);
+                    }
+                }
+            ]
+        });
+
+        // Evento de auto-guardado en base de datos al editar
+        tablaInteractiva.on("cellEdited", async function(cell) {
+            let filaDatos = cell.getRow().getData();
+            let columnaModificada = cell.getField();
+            let nuevoValor = cell.getValue();
+
+            // Validar que el ID existe
+            if (!filaDatos.id) {
+                alert("Error: El registro no tiene ID válido");
+                cell.restoreOldValue();
+                return;
+            }
+
+            const { error: updateError } = await supabaseAdminPanel
+                .from(tablaActual)
+                .update({ [columnaModificada]: nuevoValor })
+                .eq('id', filaDatos.id);
+
+            if (updateError) {
+                console.error("Error al actualizar Supabase:", updateError);
+                alert("No se pudo guardar el cambio en el servidor: " + updateError.message);
+                cell.restoreOldValue(); 
+            } else {
+                console.log(`✅ Modificado con éxito! [${tablaActual}] -> ID: ${filaDatos.id}`);
+                // Mostrar indicador visual de éxito
+                cell.getElement().style.backgroundColor = '#2d5a2d';
+                setTimeout(() => {
+                    cell.getElement().style.backgroundColor = '';
+                }, 1000);
+            }
+        });
+
+    } catch (error) {
+        console.error('Error en cambiarTabla:', error);
+        alert('Error al cargar la tabla: ' + error.message);
+    }
 }
 
-// 4. Función de la Consola SQL por pasarela REST interna (Utiliza un wrapper para comandos raw)
+// 8. Función para eliminar registro
+async function eliminarRegistro(row) {
+    try {
+        const data = row.getData();
+        const { error } = await supabaseAdminPanel
+            .from(tablaActual)
+            .delete()
+            .eq('id', data.id);
+
+        if (error) throw error;
+
+        row.delete();
+        console.log(`🗑️ Registro ID ${data.id} eliminado de ${tablaActual}`);
+    } catch (error) {
+        alert('Error al eliminar: ' + error.message);
+    }
+}
+
+// 9. Función para duplicar registro
+async function duplicarRegistro(row) {
+    try {
+        const data = row.getData();
+        // Eliminar el ID para crear uno nuevo
+        delete data.id;
+        // Eliminar timestamps si existen
+        delete data.created_at;
+        delete data.updated_at;
+
+        const { data: newData, error } = await supabaseAdminPanel
+            .from(tablaActual)
+            .insert([data])
+            .select();
+
+        if (error) throw error;
+
+        if (newData && newData[0]) {
+            // Actualizar tabla con nuevo registro
+            tablaInteractiva.addRow(newData[0]);
+            console.log(`📋 Registro duplicado en ${tablaActual}`);
+        }
+    } catch (error) {
+        alert('Error al duplicar: ' + error.message);
+    }
+}
+
+// 10. Función mejorada de ejecución SQL
 async function ejecutarSQL() {
     const query = document.getElementById("sql-query").value.trim();
     const errorBox = document.getElementById("sql-error");
     const resultadoDiv = document.getElementById("tabla-sql-resultado");
 
     errorBox.style.display = "none";
-    resultadoDiv.innerHTML = "<span style='color: #aaa;'>Ejecutando sentencia en Supabase...</span>";
+    resultadoDiv.innerHTML = "<span style='color: #aaa;'>⏳ Ejecutando sentencia en Supabase...</span>";
 
     if (!query) {
         alert("Por favor, escribe una consulta SQL.");
@@ -108,74 +299,169 @@ async function ejecutarSQL() {
     }
 
     try {
-        // Ejecución mediante interfaz de consulta directa compatible con la API de extensiones REST
-        // Nota: Si el endpoint de Supabase requiere RPC explícito, enviamos la petición estructurada
-        const response = await fetch(`${supabaseUrlAdmin}/rest/v1/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': supabaseKeyAdmin,
-                'Authorization': `Bearer ${supabaseKeyAdmin}`,
-                'X-Client-Info': 'supabase-js-admin-console'
-            },
-            body: JSON.stringify({ query: query }) 
-        });
+        // Detectar si es una consulta SELECT
+        const esSelect = query.toLowerCase().trim().startsWith('select');
 
-        // Simulación controlada para respuestas en formato JSON tabular
-        // (La API REST de Supabase devuelve un array directo si es un SELECT de tablas válidas)
-        // Para correr queries nativos puros en crudo sin Postgres Functions, consumimos el endpoint directo:
-        const rawSqlResponse = await fetch(`${supabaseUrlAdmin}/rest/v1/rpc/exec_sql_temp`, { 
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'apikey': supabaseKeyAdmin, 'Authorization': `Bearer ${supabaseKeyAdmin}` },
-            body: JSON.stringify({ sql_query: query })
-        }).catch(() => null);
+        if (esSelect) {
+            // Para SELECT, usar la API de Supabase directamente
+            const queryLower = query.toLowerCase();
+            const match = queryLower.match(/from\s+([a-zA-Z0-9_]+)/);
+            
+            if (match) {
+                const tabla = match[1];
+                const { data, error } = await supabaseAdminPanel
+                    .from(tabla)
+                    .select('*');
 
-        // Si la base de datos devuelve un set JSON estructurado, lo parseamos
-        let respuestaData;
-        if(rawSqlResponse && rawSqlResponse.ok) {
-            respuestaData = await rawSqlResponse.json();
-        } else {
-            // Fallback directo a la lectura inteligente de tablas
-            let tablaDestino = query.toLowerCase().match(/from\s+([a-zA-Z0-8_]+)/);
-            if(tablaDestino && query.toLowerCase().startsWith("select")) {
-                let { data } = await supabaseAdminPanel.from(tablaDestino[1]).select('*');
-                respuestaData = data;
+                if (error) throw error;
+
+                mostrarResultadoSQL(data || []);
             } else {
-                respuestaData = { status: "success", message: "Comando DDL/DML procesado." };
+                // Si no podemos detectar la tabla, usar RPC
+                await ejecutarSQLViaRPC(query);
             }
-        }
-
-        resultadoDiv.innerHTML = "";
-
-        if (Array.isArray(respuestaData) && respuestaData.length > 0) {
-            const columnasDinamicas = Object.keys(respuestaData[0]).map(key => {
-                return { title: key.toUpperCase(), field: key, headerSort: true };
-            });
-
-            if (tablaResultadoSQL) tablaResultadoSQL.destroy();
-
-            tablaResultadoSQL = new Tabulator("#tabla-sql-resultado", {
-                data: respuestaData,
-                layout: "fitColumns",
-                pagination: "local",
-                paginationSize: 5,
-                columns: columnasDinamicas
-            });
         } else {
-            resultadoDiv.innerHTML = `<div style="color: #00ff66; padding: 10px; background: #152515; border-radius:4px; font-size:14px;">
-                ✓ Query SQL ejecutado. Comando completado exitosamente o sin retorno de filas.
-            </div>`;
+            // Para INSERT, UPDATE, DELETE, usar RPC
+            await ejecutarSQLViaRPC(query);
         }
 
     } catch (err) {
         resultadoDiv.innerHTML = "";
-        errorBox.innerText = "Error de Sintaxis / Privilegios SQL: \n" + err.message;
+        errorBox.innerText = "❌ Error de Sintaxis / Privilegios SQL: \n" + err.message;
         errorBox.style.display = "block";
     }
 }
 
-// 5. Carga inicial del DOM
+// 11. Función para ejecutar SQL via RPC
+async function ejecutarSQLViaRPC(query) {
+    const resultadoDiv = document.getElementById("tabla-sql-resultado");
+    
+    try {
+        // Intentar ejecutar con RPC
+        const response = await fetch(`${supabaseUrlAdmin}/rest/v1/rpc/exec_sql`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': supabaseKeyAdmin,
+                'Authorization': `Bearer ${supabaseKeyAdmin}`
+            },
+            body: JSON.stringify({ 
+                sql_query: query 
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (Array.isArray(data) && data.length > 0) {
+                mostrarResultadoSQL(data);
+            } else {
+                resultadoDiv.innerHTML = `
+                    <div style="color: #00ff66; padding: 10px; background: #152515; border-radius:4px; font-size:14px;">
+                        ✅ Query SQL ejecutado correctamente. 
+                        ${data.message || 'Comando completado sin retorno de filas.'}
+                    </div>
+                `;
+            }
+        } else {
+            // Si falla RPC, intentar con el método directo
+            await ejecutarSQLDirecto(query);
+        }
+    } catch (error) {
+        // Si todo falla, intentar con el método directo
+        await ejecutarSQLDirecto(query);
+    }
+}
+
+// 12. Función para ejecutar SQL directamente
+async function ejecutarSQLDirecto(query) {
+    const resultadoDiv = document.getElementById("tabla-sql-resultado");
+    
+    try {
+        // Intentar determinar la tabla y operación
+        const queryLower = query.toLowerCase().trim();
+        const match = queryLower.match(/(from|into|update|delete from)\s+([a-zA-Z0-9_]+)/);
+        
+        if (match) {
+            const tabla = match[2];
+            const { data, error } = await supabaseAdminPanel
+                .from(tabla)
+                .select('*');
+
+            if (error) throw error;
+
+            if (Array.isArray(data) && data.length > 0) {
+                mostrarResultadoSQL(data);
+            } else {
+                resultadoDiv.innerHTML = `
+                    <div style="color: #ffcc00; padding: 10px; background: #332200; border-radius:4px; font-size:14px;">
+                        ⚠️ La consulta se ejecutó pero no hay datos para mostrar.
+                    </div>
+                `;
+            }
+        } else {
+            throw new Error('No se pudo determinar la tabla objetivo');
+        }
+    } catch (error) {
+        resultadoDiv.innerHTML = `
+            <div style="color: #ff4444; padding: 10px; background: #331111; border-radius:4px; font-size:14px;">
+                ❌ Error al ejecutar la consulta: ${error.message}
+                <br><br>
+                <small>Nota: Para consultas complejas, asegúrate de tener una función RPC 'exec_sql' configurada en Supabase.</small>
+            </div>
+        `;
+    }
+}
+
+// 13. Función para mostrar resultados SQL en tabla
+function mostrarResultadoSQL(data) {
+    const resultadoDiv = document.getElementById("tabla-sql-resultado");
+    
+    if (!data || data.length === 0) {
+        resultadoDiv.innerHTML = `
+            <div style="color: #ffcc00; padding: 10px; background: #332200; border-radius:4px; font-size:14px;">
+                ⚠️ La consulta se ejecutó pero no hay datos para mostrar.
+            </div>
+        `;
+        return;
+    }
+
+    // Generar columnas dinámicamente desde los datos
+    const columnasDinamicas = Object.keys(data[0]).map(key => ({
+        title: formatearNombreColumna(key),
+        field: key,
+        headerSort: true,
+        width: Math.min(200, Math.max(80, key.length * 12))
+    }));
+
+    if (tablaResultadoSQL) tablaResultadoSQL.destroy();
+
+    tablaResultadoSQL = new Tabulator("#tabla-sql-resultado", {
+        data: data,
+        layout: "fitColumns",
+        pagination: "local",
+        paginationSize: 10,
+        placeholder: "No hay datos para mostrar",
+        columns: columnasDinamicas
+    });
+}
+
+// 14. Carga inicial del DOM
 document.addEventListener("DOMContentLoaded", () => {
     const primerBoton = document.querySelector('.tab-btn');
-    cambiarTabla('gandolas', primerBoton);
+    if (primerBoton) {
+        cambiarTabla('gandolas', primerBoton);
+    }
 });
+
+// 15. Función para recargar tabla actual (útil después de operaciones)
+async function recargarTablaActual() {
+    if (tablaActual) {
+        const botonActivo = document.querySelector(`.tab-btn[data-tab="${tablaActual}"]`);
+        await cambiarTabla(tablaActual, botonActivo || document.querySelector('.tab-btn'));
+    }
+}
+
+// Exponer funciones globalmente
+window.cambiarTabla = cambiarTabla;
+window.ejecutarSQL = ejecutarSQL;
+window.recargarTablaActual = recargarTablaActual;
